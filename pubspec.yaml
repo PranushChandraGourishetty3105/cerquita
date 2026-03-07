@@ -1,0 +1,51 @@
+name: cerquita
+description: Cerquita Vendor & User App
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Text to Speech (Navigation voice)
+  flutter_tts: ^3.8.5
+
+  # API Calls
+  http: ^1.2.1
+
+  # Location
+  geolocator: ^10.1.0
+  geocoding: ^2.2.0
+
+  # Google Maps
+  google_maps_flutter: ^2.5.3
+
+  # Draw navigation route
+  flutter_polyline_points: ^2.0.0
+
+  # Open Google Maps Navigation
+  url_launcher: ^6.2.5
+
+  # Permissions
+  permission_handler: ^11.3.0
+
+  # Images
+  image_picker: ^1.0.7
+  file_picker: ^8.0.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
