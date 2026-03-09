@@ -1,11 +1,10 @@
-import '../services/api_service.dart';
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 import 'register_screen.dart';
 import 'vendor_dashboard.dart';
 import 'vendor_shop_page.dart';
 import 'user_home_page.dart';
-import 'widgets/common_background.dart';
 
 class LoginScreen extends StatefulWidget {
   final String role;
@@ -22,8 +21,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
 
   bool loading = false;
+  bool hidePassword = true;
 
-  /* ================= LOGIN USER ================= */
+  /* ================= LOGIN ================= */
 
   Future<void> loginUser() async {
 
@@ -41,14 +41,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final loginData = await ApiService.login(email, password);
 
+      if (!mounted) return;
+
+      if (loginData == null) {
+        showMessage("Server not responding");
+        setState(() => loading = false);
+        return;
+      }
+
       if (loginData["success"] == true) {
 
-        String role = loginData["role"];
+        String role = loginData["role"] ?? "";
 
-        /// USER LOGIN
+        /* ================= USER LOGIN ================= */
+
         if (role == "user") {
-
-          setState(() => loading = false);
 
           Navigator.pushReplacement(
             context,
@@ -57,17 +64,18 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           );
 
+          return;
         }
 
-        /// VENDOR LOGIN
-        else if (role == "vendor") {
+        /* ================= VENDOR LOGIN ================= */
+
+        if (role == "vendor") {
 
           final shopData = await ApiService.checkVendor(email);
 
-          setState(() => loading = false);
+          print("SHOP DATA: $shopData");
 
-          /// SHOP EXISTS → DASHBOARD
-          if (shopData["exists"] == true) {
+          if (shopData != null && shopData["exists"] == true) {
 
             Navigator.pushReplacement(
               context,
@@ -76,10 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
 
-          }
-
-          /// NEW VENDOR → CREATE SHOP
-          else {
+          } else {
 
             Navigator.pushReplacement(
               context,
@@ -90,27 +95,48 @@ class _LoginScreenState extends State<LoginScreen> {
 
           }
 
+          return;
         }
 
-      } else {
+        showMessage("Invalid account role");
 
-        setState(() => loading = false);
+      } 
+      else {
+
         showMessage(loginData["message"] ?? "Login failed");
 
       }
 
     } catch (e) {
 
-      setState(() => loading = false);
-      showMessage("Server error. Check backend connection.");
+      showMessage("Server error");
 
+    }
+
+    if (mounted) {
+      setState(() => loading = false);
     }
 
   }
 
+  /* ================= SNACKBAR ================= */
+
   void showMessage(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+
+  }
+
+  @override
+  void dispose() {
+
+    emailController.dispose();
+    passwordController.dispose();
+
+    super.dispose();
+
   }
 
   /* ================= UI ================= */
@@ -119,114 +145,185 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
-      body: CommonBackground(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
 
-              child: Container(
+      backgroundColor: const Color(0xFFF5F5F5),
 
-                width: 400,
+      body: SafeArea(
 
-                padding: const EdgeInsets.all(30),
+        child: Center(
 
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.92),
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    )
-                  ],
-                ),
+          child: SingleChildScrollView(
 
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+            padding: const EdgeInsets.all(24),
 
-                    Text(
-                      "Login as ${widget.role.toUpperCase()}",
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+            child: Container(
+
+              width: 420,
+
+              padding: const EdgeInsets.all(30),
+
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 25,
+                    offset: const Offset(0, 12),
+                  )
+                ],
+              ),
+
+              child: Column(
+
+                mainAxisSize: MainAxisSize.min,
+
+                children: [
+
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF2E8),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.location_on,
+                      size: 36,
+                      color: Color(0xFFFF6B00),
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  const Text(
+                    "Welcome Back",
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  const Text(
+                    "Log in to your account to continue",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: "Email address",
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
                       ),
                     ),
+                  ),
 
-                    const SizedBox(height: 30),
+                  const SizedBox(height: 18),
 
-                    /// Email
-                    TextField(
-                      controller: emailController,
-                      decoration: const InputDecoration(
-                        labelText: "Email",
-                        border: OutlineInputBorder(),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: hidePassword,
+                    decoration: InputDecoration(
+                      hintText: "Enter password",
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          hidePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            hidePassword = !hidePassword;
+                          });
+                        },
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
                       ),
                     ),
+                  ),
 
-                    const SizedBox(height: 20),
+                  const SizedBox(height: 28),
 
-                    /// Password
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: "Password",
-                        border: OutlineInputBorder(),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+
+                    child: ElevatedButton(
+
+                      onPressed: loading ? null : loginUser,
+
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6B00),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
                       ),
+
+                      child: loading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              "Log In →",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
+                  ),
 
-                    const SizedBox(height: 30),
+                  const SizedBox(height: 20),
 
-                    /// LOGIN BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
 
-                      child: ElevatedButton(
+                      const Text("Don't have an account? "),
 
-                        onPressed: loading ? null : loginUser,
+                      GestureDetector(
 
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
+                        onTap: () {
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  RegisterScreen(role: widget.role),
+                            ),
+                          );
+
+                        },
+
+                        child: const Text(
+                          "Register now",
+                          style: TextStyle(
+                            color: Color(0xFFFF6B00),
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
 
-                        child: loading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text("Login"),
+                      )
 
-                      ),
-                    ),
+                    ],
+                  )
 
-                    const SizedBox(height: 15),
-
-                    /// REGISTER BUTTON
-                    TextButton(
-                      onPressed: () {
-
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                RegisterScreen(role: widget.role),
-                          ),
-                        );
-
-                      },
-
-                      child: const Text(
-                        "Don't have an account? Register",
-                      ),
-                    ),
-
-                  ],
-                ),
+                ],
               ),
             ),
           ),

@@ -1,370 +1,463 @@
 import '../services/api_service.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'vendor_dashboard.dart';
 import 'widgets/common_background.dart';
 
 class VendorShopPage extends StatefulWidget {
-final String email;
+  final String email;
 
-const VendorShopPage({super.key, required this.email});
+  const VendorShopPage({super.key, required this.email});
 
-@override
-State<VendorShopPage> createState() => _VendorShopPageState();
+  @override
+  State<VendorShopPage> createState() => _VendorShopPageState();
 }
 
 class _VendorShopPageState extends State<VendorShopPage> {
 
-final shopController = TextEditingController();
-final proprietorController = TextEditingController();
-final addressController = TextEditingController();
-final openController = TextEditingController();
-final closeController = TextEditingController();
-final contactController = TextEditingController();
+  final shopController = TextEditingController();
+  final proprietorController = TextEditingController();
+  final addressController = TextEditingController();
+  final openController = TextEditingController();
+  final closeController = TextEditingController();
+  final contactController = TextEditingController();
 
-bool loading = false;
+  bool loading = false;
 
-double? latitude;
-double? longitude;
+  double? latitude;
+  double? longitude;
 
-@override
-void initState() {
-super.initState();
-fetchShop();
-}
+  File? shopImage;
 
-/* ================= FETCH SHOP ================= */
+  final picker = ImagePicker();
 
-Future<void> fetchShop() async {
-
-try {
-
-  final response = await http.get(
-    Uri.parse("${ApiService.baseUrl}/vendor/shop/${widget.email}"),
-  );
-
-  final data = jsonDecode(response.body);
-
-  if (data["success"] == true && data["shop"] != null) {
-
-    final shop = data["shop"];
-
-    setState(() {
-
-      shopController.text = shop["shopName"] ?? "";
-      proprietorController.text = shop["proprietorName"] ?? "";
-      addressController.text = shop["address"] ?? "";
-      openController.text = shop["openingTime"] ?? "";
-      closeController.text = shop["closingTime"] ?? "";
-      contactController.text = shop["contactNumber"] ?? "";
-
-      latitude = shop["latitude"];
-      longitude = shop["longitude"];
-
-    });
+  @override
+  void initState() {
+    super.initState();
+    fetchShop();
   }
 
-} catch (e) {
-  print(e);
-}
+  /* ================= PICK IMAGE ================= */
 
-}
+  Future<void> pickImage() async {
 
-/* ================= GET LOCATION ================= */
+    final picked = await picker.pickImage(source: ImageSource.gallery);
 
-Future<void> getLocation() async {
+    if (picked != null) {
 
-try {
+      setState(() {
+        shopImage = File(picked.path);
+      });
 
-  LocationPermission permission = await Geolocator.requestPermission();
+    }
 
-  if (permission == LocationPermission.denied) {
-    showMessage("Location permission denied");
-    return;
   }
 
-  Position position = await Geolocator.getCurrentPosition(
-    desiredAccuracy: LocationAccuracy.high,
-  );
+  /* ================= FETCH EXISTING SHOP ================= */
 
-  setState(() {
+  Future<void> fetchShop() async {
 
-    latitude = position.latitude;
-    longitude = position.longitude;
+    try {
 
-    addressController.text =
-        "Lat: ${latitude!.toStringAsFixed(5)}, Lng: ${longitude!.toStringAsFixed(5)}";
+      final response = await http.get(
+        Uri.parse("${ApiService.baseUrl}/vendor/shop/${widget.email}"),
+      );
 
-  });
+      final data = jsonDecode(response.body);
 
-  showMessage("Location detected");
+      if (data["success"] == true && data["shop"] != null) {
 
-} catch (e) {
+        final shop = data["shop"];
 
-  showMessage("Failed to detect location");
+        setState(() {
 
-}
+          shopController.text = shop["shopName"] ?? "";
+          proprietorController.text = shop["proprietorName"] ?? "";
+          addressController.text = shop["address"] ?? "";
+          openController.text = shop["openingTime"] ?? "";
+          closeController.text = shop["closingTime"] ?? "";
+          contactController.text = shop["contactNumber"] ?? "";
 
-}
+          latitude = shop["latitude"];
+          longitude = shop["longitude"];
 
-/* ================= TIME PICKER ================= */
+        });
 
-Future<void> pickTime(TextEditingController controller) async {
+      }
 
-TimeOfDay? time = await showTimePicker(
-  context: context,
-  initialTime: TimeOfDay.now(),
-);
+    } catch (e) {
+      debugPrint("Fetch shop error: $e");
+    }
 
-if (time != null) {
+  }
 
-  final now = DateTime.now();
-  final dt = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+  /* ================= LOCATION ================= */
 
-  final formattedTime =
-      TimeOfDay.fromDateTime(dt).format(context);
+  Future<void> getLocation() async {
 
-  controller.text = formattedTime;
+    try {
 
-}
+      LocationPermission permission = await Geolocator.requestPermission();
 
-}
+      if (permission == LocationPermission.denied) {
+        showMessage("Location permission denied");
+        return;
+      }
 
-/* ================= SAVE SHOP ================= */
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
 
-Future<void> saveShop() async {
+      setState(() {
 
-if (shopController.text.isEmpty ||
-    proprietorController.text.isEmpty ||
-    addressController.text.isEmpty ||
-    contactController.text.isEmpty) {
+        latitude = position.latitude;
+        longitude = position.longitude;
 
-  showMessage("Please fill all fields");
-  return;
-}
+        addressController.text =
+            "Lat: ${latitude!.toStringAsFixed(5)}, Lng: ${longitude!.toStringAsFixed(5)}";
 
-setState(() => loading = true);
+      });
 
-try {
+      showMessage("Location detected");
 
-  final response = await http.post(
-    Uri.parse("${ApiService.baseUrl}/vendor/create"),
-    headers: {"Content-Type": "application/json"},
-    body: jsonEncode({
+    } catch (e) {
 
-      "email": widget.email,
-      "shopName": shopController.text,
-      "proprietorName": proprietorController.text,
-      "address": addressController.text,
-      "openingTime": openController.text,
-      "closingTime": closeController.text,
-      "contactNumber": contactController.text,
-      "latitude": latitude,
-      "longitude": longitude
+      showMessage("Location detection failed");
 
-    }),
-  );
+    }
 
-  final data =
-      response.body.isNotEmpty ? jsonDecode(response.body) : {};
+  }
 
-  setState(() => loading = false);
+  /* ================= TIME PICKER ================= */
 
-  if (response.statusCode == 200 && data["success"] == true) {
+  Future<void> pickTime(TextEditingController controller) async {
 
-    showMessage("Shop saved successfully");
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => VendorDashboard(email: widget.email),
-      ),
+    TimeOfDay? time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
     );
 
-  } else {
+    if (time != null) {
 
-    showMessage(data["message"] ?? "Failed to save shop");
+      controller.text = time.format(context);
+
+    }
 
   }
 
-} catch (e) {
+  /* ================= SAVE SHOP ================= */
 
-  setState(() => loading = false);
-  showMessage("Server error");
+  Future<void> saveShop() async {
 
-}
+    if (shopController.text.isEmpty ||
+        proprietorController.text.isEmpty ||
+        contactController.text.isEmpty) {
 
-}
+      showMessage("Please fill all fields");
+      return;
+    }
 
-void showMessage(String msg) {
+    if (latitude == null || longitude == null) {
 
-ScaffoldMessenger.of(context)
-    .showSnackBar(SnackBar(content: Text(msg)));
+      showMessage("Please detect location first");
+      return;
 
-}
+    }
 
-/* ================= UI ================= */
+    setState(() => loading = true);
 
-@override
-Widget build(BuildContext context) {
+    try {
 
-return Scaffold(
-  body: CommonBackground(
-    child: SafeArea(
-      child: Column(
-        children: [
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("${ApiService.baseUrl}/vendor/create"),
+      );
 
-          Container(
+      request.fields["email"] = widget.email;
+      request.fields["shopName"] = shopController.text;
+      request.fields["proprietorName"] = proprietorController.text;
+      request.fields["address"] = addressController.text;
+      request.fields["openingTime"] = openController.text;
+      request.fields["closingTime"] = closeController.text;
+      request.fields["contactNumber"] = contactController.text;
+      request.fields["latitude"] = latitude!.toString();
+      request.fields["longitude"] = longitude!.toString();
+
+      if (shopImage != null) {
+
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            "image",
+            shopImage!.path,
+          ),
+        );
+
+      }
+
+      var response = await request.send();
+
+      var responseData = await response.stream.bytesToString();
+
+      final data = jsonDecode(responseData);
+
+      if (!mounted) return;
+
+      setState(() => loading = false);
+
+      if (data["success"] == true) {
+
+        showMessage(data["message"] ?? "Shop saved successfully");
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => VendorDashboard(email: widget.email),
+          ),
+        );
+
+      } else {
+
+        showMessage(data["message"] ?? "Failed to save shop");
+
+      }
+
+    } catch (e) {
+
+      if (mounted) {
+        setState(() => loading = false);
+      }
+
+      showMessage("Server connection failed");
+
+    }
+
+  }
+
+  /* ================= SNACKBAR ================= */
+
+  void showMessage(String msg) {
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
+
+  }
+
+  @override
+  void dispose() {
+
+    shopController.dispose();
+    proprietorController.dispose();
+    addressController.dispose();
+    openController.dispose();
+    closeController.dispose();
+    contactController.dispose();
+
+    super.dispose();
+
+  }
+
+  /* ================= UI ================= */
+
+  @override
+  Widget build(BuildContext context) {
+
+    return Scaffold(
+
+      body: CommonBackground(
+
+        child: SafeArea(
+
+          child: SingleChildScrollView(
+
             padding: const EdgeInsets.all(20),
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(25),
-                bottomRight: Radius.circular(25),
+
+            child: Container(
+
+              padding: const EdgeInsets.all(24),
+
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.07),
+                    blurRadius: 20,
+                  )
+                ],
               ),
-            ),
-            child: Row(
-              children: [
 
-                IconButton(
-                  icon: const Icon(Icons.arrow_back,color: Colors.white),
-                  onPressed: (){
-                    Navigator.pop(context);
-                  },
-                ),
+              child: Column(
 
-                const SizedBox(width:10),
+                crossAxisAlignment: CrossAxisAlignment.start,
 
-                const Text(
-                  "Shop Setup",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                children: [
+
+                  const Text(
+                    "Shop Setup",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
 
-              ],
-            ),
-          ),
+                  const SizedBox(height: 20),
 
-          const SizedBox(height: 30),
+                  /* SHOP IMAGE */
 
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+                  Center(
 
-              child: Container(
-                padding: const EdgeInsets.all(20),
+                    child: GestureDetector(
 
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.95),
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                      onTap: pickImage,
 
-                child: Column(
-                  children: [
+                      child: CircleAvatar(
 
-                    TextField(
-                      controller: shopController,
-                      decoration: const InputDecoration(
-                        labelText: "Shop Name",
-                        border: OutlineInputBorder(),
+                        radius: 55,
+
+                        backgroundColor: Colors.grey.shade200,
+
+                        backgroundImage:
+                            shopImage != null ? FileImage(shopImage!) : null,
+
+                        child: shopImage == null
+                            ? const Icon(Icons.camera_alt, size: 30)
+                            : null,
+
                       ),
+
                     ),
 
-                    const SizedBox(height: 15),
+                  ),
 
-                    TextField(
-                      controller: proprietorController,
-                      decoration: const InputDecoration(
-                        labelText: "Proprietor Name",
-                        border: OutlineInputBorder(),
+                  const SizedBox(height: 20),
+
+                  TextField(
+                    controller: shopController,
+                    decoration: const InputDecoration(
+                      labelText: "Shop Name",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  TextField(
+                    controller: proprietorController,
+                    decoration: const InputDecoration(
+                      labelText: "Proprietor Name",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  TextField(
+                    controller: addressController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: "Latitude & Longitude",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  ElevatedButton.icon(
+                    onPressed: getLocation,
+                    icon: const Icon(Icons.location_on),
+                    label: const Text("Detect Location"),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  Row(
+                    children: [
+
+                      Expanded(
+                        child: TextField(
+                          controller: openController,
+                          readOnly: true,
+                          onTap: () => pickTime(openController),
+                          decoration: const InputDecoration(
+                            labelText: "Opening Time",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 15),
+                      const SizedBox(width: 10),
 
-                    TextField(
-                      controller: addressController,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: "Latitude & Longitude",
-                        border: OutlineInputBorder(),
+                      Expanded(
+                        child: TextField(
+                          controller: closeController,
+                          readOnly: true,
+                          onTap: () => pickTime(closeController),
+                          decoration: const InputDecoration(
+                            labelText: "Closing Time",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
                       ),
+
+                    ],
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  TextField(
+                    controller: contactController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: "Contact Number",
+                      border: OutlineInputBorder(),
                     ),
+                  ),
 
-                    const SizedBox(height: 10),
+                  const SizedBox(height: 30),
 
-                    ElevatedButton.icon(
-                      onPressed: getLocation,
-                      icon: const Icon(Icons.location_on),
-                      label: const Text("Detect Location"),
-                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
 
-                    const SizedBox(height: 15),
+                    child: ElevatedButton(
 
-                    TextField(
-                      controller: openController,
-                      readOnly: true,
-                      onTap: () => pickTime(openController),
-                      decoration: const InputDecoration(
-                        labelText: "Opening Time",
-                        border: OutlineInputBorder(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6B00),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(22),
+                        ),
                       ),
+
+                      onPressed: loading ? null : saveShop,
+
+                      child: loading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              "Save Shop",
+                              style: TextStyle(fontSize: 17),
+                            ),
+
                     ),
+                  )
 
-                    const SizedBox(height: 15),
+                ],
 
-                    TextField(
-                      controller: closeController,
-                      readOnly: true,
-                      onTap: () => pickTime(closeController),
-                      decoration: const InputDecoration(
-                        labelText: "Closing Time",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 15),
-
-                    TextField(
-                      controller: contactController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: "Contact Number",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: loading ? null : saveShop,
-                        child: loading
-                            ? const CircularProgressIndicator()
-                            : const Text("Save Shop"),
-                      ),
-                    ),
-
-                  ],
-                ),
               ),
+
             ),
+
           ),
 
-        ],
-      ),
-    ),
-  ),
-);
+        ),
 
-}
+      ),
+
+    );
+
+  }
 }

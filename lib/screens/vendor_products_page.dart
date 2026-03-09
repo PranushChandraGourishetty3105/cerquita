@@ -1,268 +1,409 @@
 import '../services/api_service.dart';
+import 'add_product_page.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'widgets/common_background.dart';
 
 class VendorProductsPage extends StatefulWidget {
-final String email;
 
-const VendorProductsPage({super.key, required this.email});
+  final String email;
+  final double vendorLat;
+  final double vendorLng;
+  final String shopName;
+  final String role;
 
-@override
-State<VendorProductsPage> createState() => _VendorProductsPageState();
+  final double? minPrice;
+  final double? maxPrice;
+
+  final String? category; // ⭐ NEW
+
+  const VendorProductsPage({
+    super.key,
+    required this.email,
+    required this.vendorLat,
+    required this.vendorLng,
+    required this.shopName,
+    required this.role,
+    this.minPrice,
+    this.maxPrice,
+    this.category, // ⭐ NEW
+  });
+
+  @override
+  State<VendorProductsPage> createState() => _VendorProductsPageState();
 }
 
 class _VendorProductsPageState extends State<VendorProductsPage> {
 
-List products = [];
-bool loading = true;
+  List products = [];
+  bool loading = true;
 
-@override
-void initState() {
-super.initState();
-fetchProducts();
-}
+  @override
+  void initState() {
+    super.initState();
+    fetchProducts();
+  }
 
-/* ================= FETCH PRODUCTS ================= */
+  /* ================= FETCH PRODUCTS ================= */
 
-Future<void> fetchProducts() async {
+  Future<void> fetchProducts() async {
 
-try {
+    try {
 
-  final response = await http.post(
-    Uri.parse("${ApiService.baseUrl}/product/list"),
-    headers: {"Content-Type": "application/json"},
-    body: jsonEncode({"email": widget.email}),
-  );
+      final response = await http.post(
+        Uri.parse("${ApiService.baseUrl}/product/list"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": widget.email}),
+      );
 
-  if (response.statusCode == 200) {
+      if (response.statusCode == 200) {
 
-    final data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
 
-    setState(() {
+        List allProducts = data["products"] ?? [];
 
-      products = data["products"] ?? [];
-      loading = false;
+        /* ⭐ CATEGORY FILTER */
 
-    });
+        if(widget.category != null){
 
-  } else {
+          allProducts = allProducts.where((product){
 
-    setState(() => loading = false);
+            String productCategory =
+                (product["category"] ?? "").toLowerCase();
+
+            return productCategory ==
+                widget.category!.toLowerCase();
+
+          }).toList();
+
+        }
+
+        /* ⭐ PRICE FILTER */
+
+        if(widget.minPrice != null && widget.maxPrice != null){
+
+          allProducts = allProducts.where((product){
+
+            double price =
+                double.tryParse(product["price"].toString()) ?? 0;
+
+            return price >= widget.minPrice! &&
+                   price <= widget.maxPrice!;
+
+          }).toList();
+
+        }
+
+        setState(() {
+          products = allProducts;
+          loading = false;
+        });
+
+      }
+
+    } catch (e) {
+      setState(() => loading = false);
+    }
+  }
+
+  /* ================= DELETE PRODUCT ================= */
+
+  Future<void> deleteProduct(String id) async {
+
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Delete Product"),
+          content: const Text("Are you sure you want to delete this product?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context,false),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context,true),
+              child: const Text("Delete"),
+            )
+          ],
+        );
+      },
+    ) ?? false;
+
+    if(!confirm) return;
+
+    try {
+
+      await http.delete(
+        Uri.parse("${ApiService.baseUrl}/product/delete/$id"),
+      );
+
+      fetchProducts();
+
+    } catch (e) {}
 
   }
 
-} catch (e) {
+  /* ================= PRODUCT IMAGE ================= */
 
-  setState(() => loading = false);
+  Widget productImage(String? url) {
 
-}
+    if (url == null || url.isEmpty) {
+      return Container(
+        height: 80,
+        width: 80,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.fastfood,size:40,color:Colors.grey),
+      );
+    }
 
-}
-
-/* ================= DELETE PRODUCT ================= */
-
-Future<void> deleteProduct(String id) async {
-
-try {
-
-  await http.delete(
-    Uri.parse("${ApiService.baseUrl}/product/delete/$id"),
-  );
-
-  fetchProducts();
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Product deleted")),
-  );
-
-} catch (e) {
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Delete failed")),
-  );
-
-}
-
-}
-
-/* ================= UI ================= */
-
-@override
-Widget build(BuildContext context) {
-
-return Scaffold(
-
-  body: CommonBackground(
-
-    child: SafeArea(
-
-      child: Column(
-
-        children: [
-
-          /// HEADER
-          Container(
-            padding: const EdgeInsets.all(20),
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(25),
-                bottomRight: Radius.circular(25),
-              ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        url,
+        height: 80,
+        width: 80,
+        fit: BoxFit.cover,
+        errorBuilder: (context,error,stackTrace){
+          return Container(
+            height: 80,
+            width: 80,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
-              children: [
+            child: const Icon(Icons.broken_image,color:Colors.grey),
+          );
+        },
+      ),
+    );
+  }
 
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: (){
-                    Navigator.pop(context);
-                  },
-                ),
+  /* ================= UI ================= */
 
-                const SizedBox(width:10),
+  @override
+  Widget build(BuildContext context) {
 
-                const Text(
-                  "Manage Products",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+    return Scaffold(
+
+      /* ADD BUTTON ONLY FOR VENDOR */
+
+      floatingActionButton: widget.role == "Vendor"
+          ? FloatingActionButton(
+              backgroundColor: const Color(0xFFFF6B00),
+              child: const Icon(Icons.add),
+              onPressed: () {
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddProductPage(email: widget.email),
+                  ),
+                ).then((_) {
+                  fetchProducts();
+                });
+
+              },
+            )
+          : null,
+
+      body: CommonBackground(
+
+        child: SafeArea(
+
+          child: Column(
+
+            children: [
+
+              /* HEADER */
+
+              Container(
+                padding: const EdgeInsets.fromLTRB(16,20,16,20),
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF6B00),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(25),
+                    bottomRight: Radius.circular(25),
                   ),
                 ),
 
-              ],
-            ),
-          ),
+                child: Row(
 
-          const SizedBox(height:20),
+                  children: [
 
-          Expanded(
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,color:Colors.white),
+                      onPressed: (){
+                        Navigator.pop(context);
+                      },
+                    ),
 
-            child: loading
+                    const SizedBox(width:5),
 
-                ? const Center(
-                    child: CircularProgressIndicator()
-                  )
+                    const Icon(Icons.store,color: Colors.white),
 
-                : products.isEmpty
+                    const SizedBox(width:10),
 
-                    ? const Center(
-                        child: Text(
-                          "No products added yet",
-                          style: TextStyle(fontSize:16),
+                    Expanded(
+                      child: Text(
+                        widget.shopName,
+                        style: const TextStyle(
+                          fontSize:20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                      )
+                      ),
+                    ),
 
-                    : ListView.builder(
+                  ],
+                ),
+              ),
 
-                        padding: const EdgeInsets.symmetric(horizontal:20),
+              const SizedBox(height:20),
 
-                        itemCount: products.length,
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal:20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Products",
+                    style: TextStyle(
+                      fontSize:18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
 
-                        itemBuilder: (context,index){
+              const SizedBox(height:10),
 
-                          final product = products[index];
+              /* PRODUCTS LIST */
 
-                          return Container(
+              Expanded(
 
-                            margin: const EdgeInsets.only(bottom:18),
+                child: loading
+                    ? const Center(child: CircularProgressIndicator())
 
-                            padding: const EdgeInsets.all(18),
-
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.95),
-                              borderRadius: BorderRadius.circular(20),
+                    : products.isEmpty
+                        ? const Center(
+                            child: Text(
+                              "No products found",
+                              style: TextStyle(color: Colors.grey),
                             ),
+                          )
+                        : ListView.builder(
 
-                            child: Row(
+                            padding: const EdgeInsets.all(20),
+                            itemCount: products.length,
 
-                              children: [
+                            itemBuilder: (context,index){
 
-                                /// IMAGE
-                                product["image"] != null &&
-                                        product["image"] != ""
+                              final product = products[index];
 
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.network(
-                                          product["image"],
-                                          height:70,
-                                          width:70,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      )
+                              return Container(
 
-                                    : Container(
-                                        height:70,
-                                        width:70,
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[200],
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(Icons.image),
-                                      ),
+                                margin: const EdgeInsets.only(bottom:15),
+                                padding: const EdgeInsets.all(15),
 
-                                const SizedBox(width:15),
-
-                                /// DETAILS
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-
-                                      Text(
-                                        product["productName"] ?? "",
-                                        style: const TextStyle(
-                                          fontSize:16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-
-                                      const SizedBox(height:5),
-
-                                      Text("₹${product["price"]}"),
-
-                                      Text(
-                                        "Qty: ${product["quantity"]}",
-                                        style: const TextStyle(color: Colors.grey),
-                                      ),
-
-                                    ],
-                                  ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(15),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 8,
+                                    )
+                                  ],
                                 ),
 
-                                /// DELETE
-                                IconButton(
-                                  icon: const Icon(Icons.delete,color: Colors.red),
-                                  onPressed: (){
-                                    deleteProduct(product["_id"]);
-                                  },
-                                )
+                                child: Row(
 
-                              ],
-                            ),
-                          );
+                                  children: [
 
-                        },
+                                    productImage(product["image"]),
 
-                      ),
+                                    const SizedBox(width:15),
+
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+
+                                          Text(
+                                            product["productName"] ?? "",
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize:16,
+                                            ),
+                                          ),
+
+                                          const SizedBox(height:5),
+
+                                          Text(
+                                            "₹${product["price"]}",
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+
+                                          const SizedBox(height:3),
+
+                                          Text(
+                                            "Stock: ${product["quantity"]}",
+                                            style: const TextStyle(
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+
+                                          const SizedBox(height:3),
+
+                                          Text(
+                                            product["category"] ?? "",
+                                            style: const TextStyle(
+                                              color: Colors.orange,
+                                              fontSize:12,
+                                            ),
+                                          ),
+
+                                        ],
+                                      ),
+                                    ),
+
+                                    if(widget.role == "Vendor")
+                                      IconButton(
+                                        icon: const Icon(Icons.delete,color:Colors.red),
+                                        onPressed: (){
+                                          deleteProduct(product["_id"]);
+                                        },
+                                      )
+
+                                  ],
+
+                                ),
+
+                              );
+
+                            },
+
+                          ),
+
+              ),
+
+            ],
 
           ),
 
-        ],
+        ),
 
       ),
 
-    ),
+    );
 
-  ),
-
-);
-
-}
+  }
 
 }

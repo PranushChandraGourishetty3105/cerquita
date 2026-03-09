@@ -1,119 +1,437 @@
 import '../services/api_service.dart';
-import 'package:geocoding/geocoding.dart';
+import 'profile_page.dart';
 import 'vendor_products_page.dart';
 import 'navigation_page.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 
 class UserHomePage extends StatefulWidget {
-final String email;
+  final String email;
 
-const UserHomePage({super.key, required this.email});
+  const UserHomePage({super.key, required this.email});
 
-@override
-State<UserHomePage> createState() => _UserHomePageState();
+  @override
+  State<UserHomePage> createState() => _UserHomePageState();
 }
 
 class _UserHomePageState extends State<UserHomePage> {
 
-List vendors = [];
-Position? userPosition;
+  List vendors = [];
+  List filteredVendors = [];
 
-bool loading = false;
-bool locationDetected = false;
+  bool loading = false;
 
-String locationName = "Tap to detect location";
+  Position? userPosition;
+  String userAddress = "Detecting location...";
 
-/* ================= LOCATION ================= */
+  final PageController bannerController = PageController();
+  int currentBanner = 0;
 
-Future<void> getLocation() async {
+  /* BROCHURES */
 
-setState(() {
-  loading = true;
-});
+  List<String> banners = [
+    "https://res.cloudinary.com/dktefvikk/image/upload/v1773078190/b8_knkq77.jpg",
+    "https://res.cloudinary.com/dktefvikk/image/upload/v1773078191/b4_jjgtxo.jpg",
+    "https://res.cloudinary.com/dktefvikk/image/upload/v1773078190/b3_c9wpfi.jpg",
+    "https://res.cloudinary.com/dktefvikk/image/upload/v1773078190/b7_iszbjn.jpg",
+    "https://res.cloudinary.com/dktefvikk/image/upload/v1773078189/b2_dmcoiw.jpg"
+  ];
 
-try {
+  /* CATEGORY ICONS */
 
-  LocationPermission permission = await Geolocator.checkPermission();
+  Map<String, IconData> categoryIcons = {
+    "All": Icons.store,
+    "Fishes": Icons.set_meal,
+    "Biryanis": Icons.rice_bowl,
+    "Electronics": Icons.electrical_services,
+    "Kids Toys": Icons.toys,
+    "Sweets": Icons.cake,
+    "Sea Food": Icons.restaurant,
+    "Utensils": Icons.kitchen,
+    "Pet Food": Icons.pets,
+    "Juices": Icons.local_drink,
+  };
 
-  if (permission == LocationPermission.denied) {
-    permission = await Geolocator.requestPermission();
+  List<String> categories = [
+    "All",
+    "Fishes",
+    "Biryanis",
+    "Electronics",
+    "Kids Toys",
+    "Sweets",
+    "Sea Food",
+    "Utensils",
+    "Pet Food",
+    "Juices",
+  ];
+
+  String selectedCategory = "All";
+
+  /* LOCATION */
+
+  Future<void> requestLocation() async {
+
+    LocationPermission permission = await Geolocator.requestPermission();
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Location permission required")),
+      );
+
+      return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    userPosition = position;
+
+    setState(() {
+      userAddress =
+          "Lat: ${position.latitude.toStringAsFixed(3)}, Lng: ${position.longitude.toStringAsFixed(3)}";
+    });
+
+    fetchVendors();
   }
 
-  userPosition = await Geolocator.getCurrentPosition(
-    desiredAccuracy: LocationAccuracy.high,
-  );
+  /* FETCH VENDORS */
 
-} catch (e) {
+  Future<void> fetchVendors() async {
 
-  userPosition = Position(
-    latitude: 17.3850,
-    longitude: 78.4867,
-    timestamp: DateTime.now(),
-    accuracy: 1,
-    altitude: 0,
-    heading: 0,
-    speed: 0,
-    speedAccuracy: 0,
-    altitudeAccuracy: 0,
-    headingAccuracy: 0,
-  );
+    setState(() => loading = true);
 
-}
+    try {
 
-try {
+      final response =
+          await http.get(Uri.parse("${ApiService.baseUrl}/vendors"));
 
-  List<Placemark> placemarks = await placemarkFromCoordinates(
-    userPosition!.latitude,
-    userPosition!.longitude,
-  );
+      final data = jsonDecode(response.body);
 
-  Placemark place = placemarks.first;
+      List allVendors = data["vendors"] ?? [];
 
-  setState(() {
+      List nearby = [];
 
-    locationName =
-        "${place.locality ?? "Hyderabad"}, ${place.administrativeArea ?? ""}";
+      for (var vendor in allVendors) {
 
-    locationDetected = true;
+        double lat = double.parse(vendor["latitude"].toString());
+        double lng = double.parse(vendor["longitude"].toString());
 
-  });
+        double distance = Geolocator.distanceBetween(
+          userPosition!.latitude,
+          userPosition!.longitude,
+          lat,
+          lng,
+        );
 
-} catch (e) {
+        if (distance <= 15000) {
+          nearby.add(vendor);
+        }
 
-  locationName = "Hyderabad";
-  locationDetected = true;
+      }
 
-}
+      vendors = nearby;
+      filteredVendors = nearby;
 
-fetchVendors();
+    } catch (e) {}
 
-}
+    setState(() => loading = false);
 
-/* ================= FETCH VENDORS ================= */
+  }
 
-Future<void> fetchVendors() async {
+  /* SEARCH */
 
-try {
+  void searchVendor(String text) {
 
-  final response = await http.get(
-    Uri.parse("${ApiService.baseUrl}/vendors"),
-  );
+    if (text.isEmpty) {
+      setState(() => filteredVendors = vendors);
+      return;
+    }
 
-  final data = jsonDecode(response.body);
+    setState(() {
+      filteredVendors = vendors.where((vendor) {
+        String name = (vendor["shopName"] ?? "").toLowerCase();
+        return name.contains(text.toLowerCase());
+      }).toList();
+    });
 
-  List allVendors = data["vendors"] ?? [];
+  }
 
-  List nearby = [];
+  /* CATEGORY FILTER */
 
-  for (var vendor in allVendors) {
+  void filterCategory(String category) async {
 
-    if (userPosition == null) continue;
+    setState(() {
+      selectedCategory = category;
+      loading = true;
+    });
 
-    double lat = double.parse(vendor["latitude"].toString());
-    double lng = double.parse(vendor["longitude"].toString());
+    if (category == "All") {
+      setState(() {
+        filteredVendors = vendors;
+        loading = false;
+      });
+      return;
+    }
+
+    List result = [];
+
+    try {
+
+      for (var vendor in vendors) {
+
+        final response = await http.post(
+          Uri.parse("${ApiService.baseUrl}/product/list"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"email": vendor["email"]}),
+        );
+
+        final data = jsonDecode(response.body);
+        List products = data["products"] ?? [];
+
+        bool hasCategory = products.any((p) =>
+            (p["category"] ?? "")
+                .toLowerCase()
+                .contains(category.toLowerCase()));
+
+        if (hasCategory) {
+          result.add(vendor);
+        }
+
+      }
+
+    } catch (e) {}
+
+    setState(() {
+      filteredVendors = result;
+      loading = false;
+    });
+
+  }
+
+  /* BANNER AUTO SCROLL */
+
+  void startBannerAutoScroll() {
+
+    Timer.periodic(const Duration(seconds: 3), (timer) {
+
+      if (!bannerController.hasClients) return;
+
+      currentBanner++;
+
+      if (currentBanner >= banners.length) {
+        currentBanner = 0;
+      }
+
+      bannerController.animateToPage(
+        currentBanner,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeIn,
+      );
+
+    });
+
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    requestLocation();
+    startBannerAutoScroll();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    return Scaffold(
+
+      backgroundColor: const Color(0xFFF5F5F5),
+
+      appBar: AppBar(
+        title: const Text("Nearby Stores"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: (){
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfilePage(
+                    name: "User",
+                    email: widget.email,
+                    role: "User",
+                  ),
+                ),
+              );
+            },
+          )
+        ],
+      ),
+
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+
+        child: Column(
+
+          children: [
+
+            const SizedBox(height:10),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal:16),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on,color:Colors.orange),
+                  const SizedBox(width:5),
+                  Expanded(child: Text(userAddress)),
+                ],
+              ),
+            ),
+
+            const SizedBox(height:10),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal:16),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: "Search vendors",
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: searchVendor,
+              ),
+            ),
+
+            const SizedBox(height:15),
+
+            /* BROCHURES */
+
+            SizedBox(
+              height:160,
+              child: PageView.builder(
+                controller: bannerController,
+                itemCount: banners.length,
+                itemBuilder:(context,index){
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal:16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.network(
+                        banners[index],
+                        fit:BoxFit.cover,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height:15),
+
+            /* CATEGORY SCROLL */
+
+            SizedBox(
+              height:90,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal:16),
+                itemCount: categories.length,
+                itemBuilder:(context,index){
+
+                  final category = categories[index];
+
+                  return GestureDetector(
+
+                    onTap: ()=>filterCategory(category),
+
+                    child: Container(
+
+                      width:110,
+                      margin: const EdgeInsets.only(right:12),
+
+                      decoration: BoxDecoration(
+                        color: selectedCategory==category
+                            ? Colors.blue
+                            : const Color(0xFFE3F2FD),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+
+                          Icon(
+                            categoryIcons[category],
+                            size:22,
+                            color:selectedCategory==category
+                                ? Colors.white
+                                : Colors.black,
+                          ),
+
+                          const SizedBox(height:5),
+
+                          Text(
+                            category,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize:11,
+                              fontWeight: FontWeight.bold,
+                              color:selectedCategory==category
+                                  ? Colors.white
+                                  : Colors.black,
+                            ),
+                          ),
+
+                        ],
+                      ),
+
+                    ),
+
+                  );
+
+                },
+              ),
+            ),
+
+            const SizedBox(height:20),
+
+            /* VENDOR LIST */
+
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal:16),
+              itemCount: filteredVendors.length,
+              itemBuilder:(context,index){
+
+                final vendor = filteredVendors[index];
+
+                double lat = double.parse(vendor["latitude"].toString());
+                double lng = double.parse(vendor["longitude"].toString());
+
+                return storeCard(vendor,lat,lng);
+
+              },
+            )
+
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget storeCard(dynamic vendor,double lat,double lng){
 
     double distance = Geolocator.distanceBetween(
       userPosition!.latitude,
@@ -122,325 +440,105 @@ try {
       lng,
     );
 
-    if (distance <= 10000) {
-      nearby.add(vendor);
-    }
+    double km = distance/1000;
 
-  }
+    return Container(
 
-  setState(() {
+      margin: const EdgeInsets.only(bottom:20),
 
-    vendors = nearby;
-    loading = false;
-
-  });
-
-} catch (e) {
-
-  print("Vendor fetch error: $e");
-
-  setState(() {
-    loading = false;
-  });
-
-}
-
-}
-
-/* ================= UI ================= */
-
-@override
-Widget build(BuildContext context) {
-
-return Scaffold(
-
-  backgroundColor: Colors.grey[100],
-
-  appBar: AppBar(
-    backgroundColor: Colors.white,
-    elevation: 0,
-    title: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-
-        const Row(
-          children: [
-            Icon(Icons.location_on, color: Colors.red),
-            SizedBox(width: 5),
-            Text(
-              "Home",
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Icon(Icons.keyboard_arrow_down, color: Colors.black)
-          ],
-        ),
-
-        Text(
-          locationName,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 12,
-          ),
-        )
-
-      ],
-    ),
-
-    actions: [
-      IconButton(
-        icon: const Icon(Icons.account_circle, color: Colors.black),
-        onPressed: () {},
-      )
-    ],
-  ),
-
-  body: !locationDetected
-      ? Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-
-              const Icon(Icons.location_on, size: 60, color: Colors.red),
-
-              const SizedBox(height: 20),
-
-              const Text(
-                "Detect your location to see nearby vendors",
-                style: TextStyle(fontSize: 16),
-              ),
-
-              const SizedBox(height: 20),
-
-              ElevatedButton(
-                onPressed: getLocation,
-                child: const Text("Detect Location"),
-              )
-
-            ],
-          ),
-        )
-      : loading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-
-              child: Column(
-
-                crossAxisAlignment: CrossAxisAlignment.start,
-
-                children: [
-
-                  const SizedBox(height: 15),
-
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 15),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: "Search nearby stores",
-                        prefixIcon: const Icon(Icons.search),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 15),
-                    child: Text(
-                      "Nearby Stores",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  GridView.builder(
-
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 0.9,
-                    ),
-
-                    itemCount: vendors.length,
-
-                    itemBuilder: (context, index) {
-
-                      return storeCard(vendors[index]);
-
-                    },
-
-                  ),
-
-                  const SizedBox(height: 20)
-
-                ],
-
-              ),
-
-            ),
-);
-
-}
-
-/* ================= STORE CARD ================= */
-
-Widget storeCard(dynamic vendor) {
-
-if (userPosition == null) return const SizedBox();
-
-double lat = double.parse(vendor["latitude"].toString());
-double lng = double.parse(vendor["longitude"].toString());
-
-double distance = Geolocator.distanceBetween(
-  userPosition!.latitude,
-  userPosition!.longitude,
-  lat,
-  lng,
-);
-
-double km = distance / 1000;
-
-return Container(
-
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.05),
-        blurRadius: 6,
-      )
-    ],
-  ),
-
-  child: Column(
-
-    crossAxisAlignment: CrossAxisAlignment.start,
-
-    children: [
-
-      ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-        child: Image.network(
-          "https://source.unsplash.com/400x300/?shop,store",
-          height: 100,
-          width: double.infinity,
-          fit: BoxFit.cover,
-        ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
       ),
 
-      Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: Column(
 
-            Text(
-              vendor["shopName"] ?? "",
-              style: const TextStyle(fontWeight: FontWeight.bold),
+        children: [
+
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: Image.network(
+              vendor["shopImage"] ?? "https://via.placeholder.com/300",
+              height:160,
+              width:double.infinity,
+              fit: BoxFit.cover,
             ),
+          ),
 
-            const SizedBox(height: 3),
+          Padding(
 
-            Text(
-              "${km.toStringAsFixed(1)} km away",
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 12,
-              ),
-            ),
+            padding: const EdgeInsets.all(14),
 
-            const SizedBox(height: 8),
+            child: Column(
 
-            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
               children: [
 
-                Expanded(
-                  child: ElevatedButton(
-
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-
-                    onPressed: () {
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => VendorProductsPage(
-                            email: vendor["email"],
-                          ),
-                        ),
-                      );
-
-                    },
-
-                    child: const Text("View", style: TextStyle(fontSize: 12)),
-                  ),
+                Text(
+                  vendor["shopName"] ?? "",
+                  style: const TextStyle(
+                      fontSize:18,fontWeight:FontWeight.bold),
                 ),
 
-                const SizedBox(width: 6),
+                const SizedBox(height:6),
 
-                Expanded(
-                  child: ElevatedButton(
+                Text("${km.toStringAsFixed(1)} km away"),
 
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                const SizedBox(height:12),
+
+                Row(
+
+                  children: [
+
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6B00),
+                        ),
+                        onPressed: (){
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => VendorProductsPage(
+                                email: vendor["email"],
+                                vendorLat: lat,
+                                vendorLng: lng,
+                                shopName: vendor["shopName"] ?? "Shop",
+                                role:"User",
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text("View Products"),
+                      ),
                     ),
 
-                    onPressed: () {
+                    const SizedBox(width:10),
 
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => NavigationPage(
-                            vendorLat: lat,
-                            vendorLng: lng,
-                            shopName: vendor["shopName"],
+                    IconButton(
+                      icon: const Icon(Icons.navigation),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => NavigationPage(
+                              vendorLat: lat,
+                              vendorLng: lng,
+                              shopName: vendor["shopName"] ?? "Shop",
+                            ),
                           ),
-                        ),
-                      );
+                        );
+                      },
+                    )
 
-                    },
-
-                    child: const Text("Navigate", style: TextStyle(fontSize: 12)),
-                  ),
-                ),
-
+                  ],
+                )
               ],
-            )
-
-          ],
-        ),
-      )
-
-    ],
-
-  ),
-
-);
-
-}
-
+            ),
+          )
+        ],
+      ),
+    );
+  }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'widgets/common_background.dart';
+import 'role_selection.dart'; // ✅ FIXED IMPORT
 
 class VendorProfilePage extends StatefulWidget {
 
@@ -21,7 +22,7 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
 
   bool loading = true;
 
-  final String baseUrl = "http://localhost:5000";
+  final String baseUrl = "https://cerquita-backend.onrender.com";
 
   @override
   void initState() {
@@ -73,62 +74,69 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
   Widget build(BuildContext context) {
 
     return Scaffold(
+
       body: CommonBackground(
+
         child: SafeArea(
 
           child: loading
               ? const Center(child: CircularProgressIndicator())
 
-              : Column(
-                  children: [
+              : SingleChildScrollView(
 
-                    /// HEADER WITH BACK BUTTON
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(25),
-                          bottomRight: Radius.circular(25),
+                  child: Column(
+
+                    children: [
+
+                      /* HEADER */
+
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(25),
+                            bottomRight: Radius.circular(25),
+                          ),
+                        ),
+
+                        child: Row(
+                          children: [
+
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back,
+                                  color: Colors.white),
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                            ),
+
+                            const SizedBox(width: 10),
+
+                            const Text(
+                              "Vendor Profile",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+
+                          ],
                         ),
                       ),
-                      child: Row(
-                        children: [
 
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back,
-                                color: Colors.white),
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                          ),
+                      const SizedBox(height: 30),
 
-                          const SizedBox(width: 10),
-
-                          const Text(
-                            "Vendor Profile",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    Expanded(
-                      child: SingleChildScrollView(
+                      Padding(
                         padding: const EdgeInsets.all(20),
 
                         child: Column(
                           children: [
 
-                            /// ACCOUNT INFO
+                            /* ACCOUNT INFO */
+
                             profileCard(
                               title: "Account Information",
                               children: [
@@ -144,7 +152,8 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
 
                             const SizedBox(height: 20),
 
-                            /// SHOP INFO
+                            /* SHOP INFO */
+
                             profileCard(
                               title: "Shop Information",
                               children: [
@@ -174,7 +183,8 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
 
                             const SizedBox(height: 20),
 
-                            /// PRODUCT STATS
+                            /* PRODUCT STATS */
+
                             profileCard(
                               title: "Statistics",
                               children: [
@@ -187,12 +197,59 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
                               ],
                             ),
 
+                            const SizedBox(height: 30),
+
+                            /* LOGOUT BUTTON */
+
+                            SizedBox(
+                              width: double.infinity,
+
+                              child: ElevatedButton(
+
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+
+                                onPressed: () {
+
+                                  Navigator.pushAndRemoveUntil(
+
+                                    context,
+
+                                    MaterialPageRoute(
+                                      builder: (context) => const RoleSelection(), // ✅ FIXED
+
+                                    ),
+
+                                    (route) => false,
+
+                                  );
+
+                                },
+
+                                child: const Text(
+                                  "Logout",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+
+                              ),
+                            ),
+
+                            const SizedBox(height: 40),
+
                           ],
                         ),
                       ),
-                    ),
 
-                  ],
+                    ],
+                  ),
                 ),
         ),
       ),
@@ -269,4 +326,5 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
       ),
     );
   }
+
 }

@@ -26,7 +26,6 @@ class NavigationPage extends StatefulWidget {
 class _NavigationPageState extends State<NavigationPage> {
 
   GoogleMapController? mapController;
-
   Position? userPosition;
 
   Set<Marker> markers = {};
@@ -36,7 +35,6 @@ class _NavigationPageState extends State<NavigationPage> {
   String duration = "";
 
   List<String> directions = [];
-
   int currentStep = 0;
 
   String currentInstruction = "";
@@ -45,9 +43,9 @@ class _NavigationPageState extends State<NavigationPage> {
   bool navigationStarted = false;
 
   FlutterTts tts = FlutterTts();
-
   StreamSubscription<Position>? positionStream;
 
+  /// Replace with your API key
   final String googleApiKey = "AIzaSyBPTPdUW3h6jPl--XF8R_CLEYd1HMsKGTs";
 
   @override
@@ -57,21 +55,7 @@ class _NavigationPageState extends State<NavigationPage> {
     getUserLocation();
   }
 
-  /* ===== RELOAD NAVIGATION WHEN SHOP CHANGES ===== */
-
-  @override
-  void didUpdateWidget(covariant NavigationPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.vendorLat != widget.vendorLat ||
-        oldWidget.vendorLng != widget.vendorLng) {
-
-      resetNavigation();
-      getUserLocation();
-    }
-  }
-
-  /* ================= RESET NAVIGATION ================= */
+  /* ================= RESET ================= */
 
   void resetNavigation() {
 
@@ -80,7 +64,6 @@ class _NavigationPageState extends State<NavigationPage> {
     markers.clear();
 
     currentStep = 0;
-
     currentInstruction = "";
     nextInstruction = "";
 
@@ -89,20 +72,26 @@ class _NavigationPageState extends State<NavigationPage> {
     positionStream?.cancel();
   }
 
-  /* ================= SPEAK ================= */
+  /* ================= TEXT TO SPEECH ================= */
 
   Future speak(String text) async {
+
     await tts.stop();
     await tts.setSpeechRate(0.5);
     await tts.setPitch(1);
     await tts.speak(text);
+
   }
 
   /* ================= START NAVIGATION ================= */
 
   void startNavigation() async {
 
-    navigationStarted = true;
+    if (userPosition == null) return;
+
+    setState(() {
+      navigationStarted = true;
+    });
 
     await createRoute();
 
@@ -120,9 +109,7 @@ class _NavigationPageState extends State<NavigationPage> {
       userPosition = position;
 
       updateUserMarker();
-
       moveCamera();
-
       updateInstruction();
 
       setState(() {});
@@ -134,7 +121,6 @@ class _NavigationPageState extends State<NavigationPage> {
   void updateInstruction() {
 
     if (directions.isEmpty) return;
-
     if (currentStep >= directions.length) return;
 
     currentInstruction = directions[currentStep];
@@ -163,9 +149,7 @@ class _NavigationPageState extends State<NavigationPage> {
     );
 
     createMarkers();
-
     await createRoute();
-
     moveCamera();
 
     setState(() {});
@@ -174,6 +158,8 @@ class _NavigationPageState extends State<NavigationPage> {
   /* ================= UPDATE USER MARKER ================= */
 
   void updateUserMarker() {
+
+    if (userPosition == null) return;
 
     markers.removeWhere((m) => m.markerId.value == "user");
 
@@ -241,7 +227,6 @@ class _NavigationPageState extends State<NavigationPage> {
         "&key=$googleApiKey";
 
     final response = await http.get(Uri.parse(url));
-
     final data = jsonDecode(response.body);
 
     if (data["routes"].isEmpty) return;
@@ -254,7 +239,6 @@ class _NavigationPageState extends State<NavigationPage> {
     for (var step in steps) {
 
       String instruction = step["html_instructions"];
-
       instruction = instruction.replaceAll(RegExp(r'<[^>]*>'), '');
 
       directions.add(instruction);
